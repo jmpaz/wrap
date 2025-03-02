@@ -1,73 +1,45 @@
-# wrap-go
+# wrap
 
-A single `wrap` binary (written in Go) that implements two main functions:
+`wrap` is a simple tool for wrapping text in a fenced code block (adaptive to input content) or `<paste>` tags:
 
 1. **Wrap from stdin to stdout**  
    `wrap [md|xml]`
 
-   If you pipe content into `wrap` without specifying a format, it defaults to Markdown (`md`).  
+   - If format is `md` (default), fences the content with backticks.
+     - If the longest run of backticks in the content is ≥ 3, the fence is `(longest + 2)` backticks.
+     - otherwise, uses 3 backticks.
    - If `xml`, wraps content in `<paste> ... </paste>`.
-   - If `md`, fences the content with backticks.  
-     - If the longest run of backticks in the content is ≥ 3, 
-       the fence is `(longest + 2)` backticks.
-     - Otherwise, uses 3 backticks.
 
-2. **Wrap, then paste**  
+2. **Wrap clipboard content, then paste**  
    `wrap paste [md|xml]`
 
    - Reads the current clipboard text.
-   - Checks if it’s **already** wrapped in `<paste>...</paste>` (for XML) or 
-     in the correct Markdown fence (for MD).
-   - If already wrapped, it simply simulates a "paste" keystroke.
+   - Checks if the text is already wrapped in `<paste>...</paste>` or in backticks, depending on the format.
+   - If already wrapped, it simply simulates a "paste" keystroke (ctrl+shift+v on linux, cmd+v on macOS).
    - Otherwise:
-     1. Wraps the clipboard text (XML or MD).
-     2. Updates the clipboard with the new wrapped text.
-     3. Simulates a "paste" keystroke (~0.2s later).
+     1. Wraps clipboard text
+     2. Updates clipboard with wrapped text
+     3. Simulates a "paste" keystroke after a delay
+
 
 ### Dependencies
 
-- **macOS**  
-  - You should have the standard `pbpaste` and `pbcopy` commands for clipboard I/O.  
-  - Uses `osascript` to simulate `Cmd+V`.
 - **Linux**  
   - At least one of `wl-copy`/`wl-paste`, `xclip`, or `xsel` for clipboard I/O.
   - [`ydotool`](https://github.com/ReimuNotMoe/ydotool) is required for simulating Ctrl+Shift+V.
 
-### Installation
-
-```bash
-git clone ...
-cd wrap-go
-go build -o wrap ./cmd/wrap
-```
-
-You now have a `wrap` binary.
 
 ### Usage
 
+wrap from stdin -> stdout:
 ```bash
-# 1) Wrap from stdin -> stdout
 echo "some text" | ./wrap md  # defaults to md if no format is specified
 echo "some text" | ./wrap xml
-
-# 2) Wrap & paste from clipboard
-./wrap paste
-./wrap paste xml
 ```
 
-### Examples
-
+wrap & paste:
 ```bash
-# Example: wrap MD from stdin (default)
-echo "\`\`\`some code\`\`\`" | ./wrap
+wrap paste md  # wraps clipboard content in a code block, then emits ctrl+shift+v / cmd+v
+wrap paste xml
 ```
 
-This might output something like:
-
-`````````````````````
-\`\`\`\`
-\`\`\`some code\`\`\`
-\`\`\`\`
-`````````````````````
-
-where the fence length is determined based on the longest run of backticks in the content.
