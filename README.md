@@ -1,6 +1,6 @@
 # wrap
 
-`wrap` is a simple tool for wrapping text in a fenced code block (adaptive to input content) or `<paste>` tags:
+`wrap` is a utility for wrapping text in a fenced code block (adaptive to input content) or `<paste>` tags:
 
 1. **Wrap from stdin to stdout**  
    `wrap [md|xml]`
@@ -25,7 +25,6 @@
 ### Dependencies
 
 - **Linux**  
-  - At least one of `wl-copy`/`wl-paste`, `xclip`, or `xsel` for clipboard I/O.
   - [`ydotool`](https://github.com/ReimuNotMoe/ydotool) is required for simulating Ctrl+Shift+V.
 
 
@@ -42,4 +41,6 @@ wrap & paste:
 wrap paste md  # wraps clipboard content in a code block, then emits ctrl+shift+v / cmd+v
 wrap paste xml
 ```
+
+compatible with macOS + Linux (X11/Wayland).
 
