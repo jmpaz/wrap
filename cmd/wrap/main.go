@@ -25,7 +25,6 @@ Examples:
 }
 
 func main() {
-	// If no arguments, check if we're receiving data from stdin.
 	if len(os.Args) == 1 {
 		content, err := readAllStdin()
 		if err != nil {
@@ -64,6 +63,59 @@ func main() {
 	}
 }
 
+// checks whether content is already wrapped as markdown/xml
+// returns "md", "xml", or "" if neither
+func detectWrappedFormat(content string) string {
+	if isAlreadyWrapped(content, "md") {
+		return "md"
+	}
+	if isAlreadyWrapped(content, "xml") {
+		return "xml"
+	}
+	return ""
+}
+
+// removes markdown code fences if present
+func unwrapMd(content string) string {
+	lines := strings.Split(content, "\n")
+	lines = trimEmptyLines(lines)
+	if len(lines) == 0 {
+		return content // nothing to unwrap
+	}
+
+	overallLongest := fence.LongestBacktickRun(content)
+	firstLineLongest := fence.LongestBacktickRun(lines[0])
+	lastLineLongest := fence.LongestBacktickRun(lines[len(lines)-1])
+
+	start := 0
+	if firstLineLongest == overallLongest && firstLineLongest >= 3 {
+		start = 1
+	}
+
+	end := len(lines)
+	if lastLineLongest == overallLongest && lastLineLongest >= 3 && end > start {
+		end--
+	}
+
+	middle := lines[start:end]
+	return strings.Join(middle, "\n")
+}
+
+// remove <paste> tags if present
+func unwrapXml(content string) string {
+	lines := strings.Split(content, "\n")
+	lines = trimEmptyLines(lines)
+	if len(lines) < 2 {
+		return content
+	}
+	if strings.TrimSpace(lines[0]) == "<paste>" &&
+		strings.TrimSpace(lines[len(lines)-1]) == "</paste>" {
+		middle := lines[1 : len(lines)-1]
+		return strings.Join(middle, "\n")
+	}
+	return content
+}
+
 func handlePaste(format string) {
 	clipText, err := clip.ReadClipboard()
 	if err != nil {
@@ -71,18 +123,24 @@ func handlePaste(format string) {
 		os.Exit(1)
 	}
 
-	if isAlreadyWrapped(clipText, format) {
-		// Already wrapped; just simulate paste.
-		if err := paste.SimulatePaste(); err != nil {
-			fmt.Fprintf(os.Stderr, "simulate paste error: %v\n", err)
-			os.Exit(1)
-		}
-		return
+	wrappedIn := detectWrappedFormat(clipText)
+	var newText string
+
+	switch {
+	case wrappedIn == format:
+		newText = clipText
+	case wrappedIn == "md" && format == "xml":
+		newText = wrap.WrapContent(unwrapMd(clipText), "xml")
+	case wrappedIn == "xml" && format == "md":
+		newText = wrap.WrapContent(unwrapXml(clipText), "md")
+	default:
+		newText = wrap.WrapContent(clipText, format)
 	}
 
-	// Not wrapped -> wrap, update clipboard, then paste.
-	wrapped := wrap.WrapContent(clipText, format)
-	if err := clip.WriteClipboard(wrapped); err != nil {
+	// trim trailing newlines to avoid extra blank lines when pasting
+	newText = strings.TrimRight(newText, "\n")
+
+	if err := clip.WriteClipboard(newText); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to write wrapped content to clipboard: %v\n", err)
 		os.Exit(1)
 	}
@@ -93,13 +151,9 @@ func handlePaste(format string) {
 	}
 }
 
-// isAlreadyWrapped checks if the clipboard content is “already fenced” by your new rule:
-// “If the longest run of backticks in the entire text is found in either the
-// first or last non-whitespace line (and is >=3), then we consider it already fenced.”
-// For XML, if the first/last lines match <paste>...</paste>, we consider it fenced.
-func isAlreadyWrapped(s, format string) bool {
-	// Trim trailing + leading whitespace lines
-	lines := strings.Split(s, "\n")
+// check if the content is already fenced/tagged
+func isAlreadyWrapped(content, format string) bool {
+	lines := strings.Split(content, "\n")
 	lines = trimEmptyLines(lines)
 	if len(lines) == 0 {
 		return false
@@ -107,7 +161,6 @@ func isAlreadyWrapped(s, format string) bool {
 
 	switch format {
 	case "xml":
-		// Simple check
 		if strings.TrimSpace(lines[0]) == "<paste>" &&
 			strings.TrimSpace(lines[len(lines)-1]) == "</paste>" {
 			return true
@@ -115,7 +168,7 @@ func isAlreadyWrapped(s, format string) bool {
 		return false
 
 	case "md":
-		overallLongest := fence.LongestBacktickRun(s)
+		overallLongest := fence.LongestBacktickRun(content)
 		if overallLongest < 3 {
 			return false
 		}
@@ -133,7 +186,7 @@ func isAlreadyWrapped(s, format string) bool {
 	}
 }
 
-// trimEmptyLines removes leading/trailing lines if they're all whitespace.
+// remove leading/trailing lines if they're all whitespace
 func trimEmptyLines(lines []string) []string {
 	start := 0
 	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
