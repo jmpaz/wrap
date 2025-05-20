@@ -84,20 +84,19 @@ func unwrapMd(content string) string {
 	}
 
 	overallLongest := fence.LongestBacktickRun(content)
-	firstLineLongest := fence.LongestBacktickRun(lines[0])
-	lastLineLongest := fence.LongestBacktickRun(lines[len(lines)-1])
+	if overallLongest < 3 {
+		return content
+	}
+	fenceLine := strings.Repeat("`", overallLongest)
 
-	start := 0
-	if firstLineLongest == overallLongest && firstLineLongest >= 3 {
-		start = 1
+	first := strings.TrimSpace(lines[0])
+	last := strings.TrimSpace(lines[len(lines)-1])
+
+	if first != fenceLine || last != fenceLine {
+		return content
 	}
 
-	end := len(lines)
-	if lastLineLongest == overallLongest && lastLineLongest >= 3 && end > start {
-		end--
-	}
-
-	middle := lines[start:end]
+	middle := lines[1 : len(lines)-1]
 	return strings.Join(middle, "\n")
 }
 
@@ -108,12 +107,30 @@ func unwrapXml(content string) string {
 	if len(lines) < 2 {
 		return content
 	}
-	if strings.TrimSpace(lines[0]) == "<paste>" &&
-		strings.TrimSpace(lines[len(lines)-1]) == "</paste>" {
-		middle := lines[1 : len(lines)-1]
-		return strings.Join(middle, "\n")
+
+	if strings.TrimSpace(lines[0]) != "<paste>" ||
+		strings.TrimSpace(lines[len(lines)-1]) != "</paste>" {
+		return content
 	}
-	return content
+
+	middle := strings.Join(lines[1:len(lines)-1], "\n")
+
+	// if the middle is exactly a fenced code block, drop the tags
+	midLines := strings.Split(middle, "\n")
+	midLines = trimEmptyLines(midLines)
+	if len(midLines) >= 2 {
+		overallLongest := fence.LongestBacktickRun(middle)
+		if overallLongest >= 3 {
+			fenceLine := strings.Repeat("`", overallLongest)
+			first := strings.TrimSpace(midLines[0])
+			last := strings.TrimSpace(midLines[len(midLines)-1])
+			if first == fenceLine && last == fenceLine {
+				return middle
+			}
+		}
+	}
+
+	return middle
 }
 
 func handlePaste(format string) {
@@ -173,13 +190,11 @@ func isAlreadyWrapped(content, format string) bool {
 			return false
 		}
 
-		firstLine := lines[0]
-		lastLine := lines[len(lines)-1]
+		fenceLine := strings.Repeat("`", overallLongest)
+		first := strings.TrimSpace(lines[0])
+		last := strings.TrimSpace(lines[len(lines)-1])
 
-		longestFirst := fence.LongestBacktickRun(firstLine)
-		longestLast := fence.LongestBacktickRun(lastLine)
-
-		return (longestFirst == overallLongest) || (longestLast == overallLongest)
+		return first == fenceLine && last == fenceLine
 
 	default:
 		return false
