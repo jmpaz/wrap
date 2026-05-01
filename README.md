@@ -1,46 +1,48 @@
 # wrap
 
-`wrap` is a utility for wrapping text in a fenced code block (adaptive to input content) or `<paste>` tags:
+`wrap` wraps text in a fenced code block or `<paste>` tags.
 
-1. **Wrap from stdin to stdout**  
+1. **Wrap from stdin to stdout**
    `wrap [md|xml]`
 
-   - If format is `md` (default), fences the content with backticks.
-     - If the longest run of backticks in the content is ≥ 3, the fence is `(longest + 2)` backticks.
-     - otherwise, uses 3 backticks.
-   - If `xml`, wraps content in `<paste> ... </paste>`.
+   - If format is `md`, fences the content with backticks.
+     - If the longest run of backticks in the content is >= 3, the fence is `(longest + 2)` backticks.
+     - Otherwise, uses 3 backticks.
+   - If format is `xml`, wraps content in `<paste> ... </paste>` tags.
 
-2. **Wrap clipboard content, then paste**  
-   `wrap paste [md|xml]`
+2. **Unwrap from stdin to stdout**
+   `wrap unwrap`
 
+   - Removes outer markdown fences or `<paste>...</paste>` tags.
+   - Leaves content unchanged when no known wrapper is present.
+
+3. **Wrap clipboard content, then paste**
+   `wrapctl paste [md|xml]`
+
+   - Sends the request to `wrapd` over `$XDG_RUNTIME_DIR/wrap/wrapd.sock`.
    - Reads the current clipboard text.
-   - Checks if the text is already wrapped in `<paste>...</paste>` or in backticks, depending on the format.
-   - If already wrapped, it simply simulates a "paste" keystroke (ctrl+shift+v on linux, cmd+v on macOS).
-   - Otherwise:
-     1. Wraps clipboard text
-     2. Updates clipboard with wrapped text
-     3. Simulates a "paste" keystroke after a delay
+   - Checks whether the text is already wrapped.
+   - Updates the clipboard with the requested wrapper when needed.
+   - Emits `Ctrl+Shift+V`.
 
+4. **Unwrap clipboard content, then paste**
+   `wrapctl unwrap-paste`
 
-### Dependencies
+   - Removes outer markdown fences or `<paste>...</paste>` tags from the clipboard.
+   - Emits `Ctrl+Shift+V`.
 
-- **Linux**  
-  - [`ydotool`](https://github.com/ReimuNotMoe/ydotool) is required for simulating Ctrl+Shift+V.
+5. **Check daemon status**
+   `wrapctl status`
 
+### Wayland
 
-### Usage
+`wrapd` uses `zwlr_data_control_manager_v1` for clipboard access and `zwp_virtual_keyboard_manager_v1` for paste key events.
 
-wrap from stdin -> stdout:
-```bash
-echo "some text" | ./wrap md  # defaults to md if no format is specified
-echo "some text" | ./wrap xml
+## Home Manager
+
+```nix
+{
+  imports = [ inputs.wrap.homeManagerModules.default ];
+  programs.wrap.enable = true;
+}
 ```
-
-wrap & paste:
-```bash
-wrap paste md  # wraps clipboard content in a code block, then emits ctrl+shift+v / cmd+v
-wrap paste xml
-```
-
-compatible with macOS + Linux (X11/Wayland).
-

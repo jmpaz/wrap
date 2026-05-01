@@ -1,0 +1,21 @@
+[package]
+name = "wrap"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "wrap"
+path = "src/lib.rs"
+
+[[bin]]
+name = "wrap"
+path = "src/bin/wrap.rs"
+
+[[bin]]
+name = "wrapctl"
+path = "src/bin/wrapctl.rs"
+
+[[bin]]
+name = "wrapd"
+path = "src/bin/wrapd.rs"
