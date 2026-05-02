@@ -51,6 +51,8 @@ fn run() -> Result<(), String> {
 fn request_from_args(args: Vec<String>) -> Result<String, String> {
     match args.as_slice() {
         [command] if command == "status" => Ok("STATUS\n".to_string()),
+        [command] if command == "emit-paste" => Ok(format!("EMIT_PASTE {}\n", now_ms())),
+        [command] if command == "paste-stdin" => paste_stdin_request(),
         [command] if command == "unwrap-paste" => Ok(format!("UNWRAP_PASTE {}\n", now_ms())),
         [command, format] if command == "paste" => {
             let format = Format::from_str(format)?;
@@ -58,6 +60,19 @@ fn request_from_args(args: Vec<String>) -> Result<String, String> {
         }
         _ => Err(usage()),
     }
+}
+
+fn paste_stdin_request() -> Result<String, String> {
+    let mut content = String::new();
+    std::io::stdin()
+        .read_to_string(&mut content)
+        .map_err(|err| format!("failed to read stdin: {err}"))?;
+    Ok(format!(
+        "PASTE_TEXT {} {}\n{}",
+        now_ms(),
+        content.len(),
+        content
+    ))
 }
 
 fn socket_path() -> Result<PathBuf, String> {
@@ -72,7 +87,7 @@ fn socket_path() -> Result<PathBuf, String> {
 }
 
 fn usage() -> String {
-    "Usage:\n  wrapctl paste [md|xml]\n  wrapctl unwrap-paste\n  wrapctl status".to_string()
+    "Usage:\n  wrapctl paste [md|xml]\n  wrapctl paste-stdin\n  wrapctl emit-paste\n  wrapctl unwrap-paste\n  wrapctl status".to_string()
 }
 
 fn now_ms() -> u64 {
@@ -80,4 +95,17 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::request_from_args;
+
+    #[test]
+    fn emit_paste_builds_timestamped_request() {
+        let request = request_from_args(vec!["emit-paste".to_string()]).unwrap();
+
+        assert!(request.starts_with("EMIT_PASTE "));
+        assert!(request.ends_with('\n'));
+    }
 }

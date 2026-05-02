@@ -87,7 +87,7 @@ fn event_loop(wayland: &mut Wayland, listener: UnixListener) -> Result<(), Strin
 fn handle_client(wayland: &mut Wayland, mut stream: UnixStream) {
     let started = Instant::now();
     let response = read_request(&mut stream).and_then(|request| {
-        eprintln!("request start: {request}");
+        eprintln!("request start: {}", request_label(&request));
         handle_request(wayland, &request)
     });
     let elapsed = started.elapsed();
@@ -110,14 +110,27 @@ fn read_request(stream: &mut UnixStream) -> Result<String, String> {
         .read_to_string(&mut request)
         .map_err(|err| format!("failed to read request: {err}"))?;
 
-    Ok(request.trim().to_string())
+    Ok(request)
 }
 
 fn handle_request(wayland: &mut Wayland, request: &str) -> Result<String, String> {
+    if let Some((sent_at, content)) = parse_paste_text_request(request)? {
+        reject_stale_action(sent_at)?;
+        wayland.set_clipboard(content)?;
+        wayland.paste_ctrl_shift_v()?;
+        return Ok(String::new());
+    }
+
+    let request = request.trim();
     let parts = request.split_whitespace().collect::<Vec<_>>();
 
     match parts.as_slice() {
         ["STATUS"] => Ok(wayland.status()),
+        ["EMIT_PASTE", sent_at] => {
+            reject_stale_action(sent_at)?;
+            wayland.paste_ctrl_shift_v()?;
+            Ok(String::new())
+        }
         ["UNWRAP_PASTE", sent_at] => {
             reject_stale_action(sent_at)?;
             let content = wayland.read_clipboard()?;
@@ -138,6 +151,47 @@ fn handle_request(wayland: &mut Wayland, request: &str) -> Result<String, String
             Ok(String::new())
         }
         _ => Err("unknown request".to_string()),
+    }
+}
+
+fn parse_paste_text_request(request: &str) -> Result<Option<(&str, String)>, String> {
+    let Some(rest) = request.strip_prefix("PASTE_TEXT ") else {
+        return Ok(None);
+    };
+
+    let (header, content) = rest
+        .split_once('\n')
+        .ok_or_else(|| "invalid PASTE_TEXT request".to_string())?;
+    let mut fields = header.split_whitespace();
+    let sent_at = fields
+        .next()
+        .ok_or_else(|| "invalid PASTE_TEXT request".to_string())?;
+    let expected_len = fields
+        .next()
+        .ok_or_else(|| "invalid PASTE_TEXT request".to_string())?
+        .parse::<usize>()
+        .map_err(|_| "invalid PASTE_TEXT length".to_string())?;
+    if fields.next().is_some() {
+        return Err("invalid PASTE_TEXT request".to_string());
+    }
+    let actual_len = content.len();
+    if actual_len != expected_len {
+        return Err(format!(
+            "invalid PASTE_TEXT length: expected {expected_len}, got {actual_len}"
+        ));
+    }
+
+    Ok(Some((sent_at, content.to_string())))
+}
+
+fn request_label(request: &str) -> String {
+    if request.starts_with("PASTE_TEXT ") {
+        match parse_paste_text_request(request) {
+            Ok(Some((_, content))) => format!("PASTE_TEXT len={}", content.len()),
+            _ => "PASTE_TEXT invalid".to_string(),
+        }
+    } else {
+        request.trim().to_string()
     }
 }
 
@@ -1039,4 +1093,30 @@ extern "C" {
     fn pipe(fds: *mut i32) -> i32;
     fn close(fd: i32) -> i32;
     fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_paste_text_request, request_label};
+
+    #[test]
+    fn parses_paste_text_payload_without_trimming_content() {
+        let request = "PASTE_TEXT 123 12\nhello\nworld\n";
+        let (sent_at, content) = parse_paste_text_request(request).unwrap().unwrap();
+
+        assert_eq!(sent_at, "123");
+        assert_eq!(content, "hello\nworld\n");
+    }
+
+    #[test]
+    fn rejects_paste_text_length_mismatch() {
+        let err = parse_paste_text_request("PASTE_TEXT 123 9\nhello").unwrap_err();
+
+        assert!(err.contains("invalid PASTE_TEXT length"));
+    }
+
+    #[test]
+    fn paste_text_request_label_hides_content() {
+        assert_eq!(request_label("PASTE_TEXT 123 5\nhello"), "PASTE_TEXT len=5");
+    }
 }

@@ -31,7 +31,19 @@
    - Removes outer markdown fences or `<paste>...</paste>` tags from the clipboard.
    - Emits `Ctrl+Shift+V`.
 
-5. **Check daemon status**
+5. **Paste stdin**
+   `wrapctl paste-stdin`
+
+   - Reads text from stdin.
+   - Sets the clipboard to that text.
+   - Emits `Ctrl+Shift+V`.
+
+6. **Emit paste**
+   `wrapctl emit-paste`
+
+   - Emits `Ctrl+Shift+V` without changing the clipboard.
+
+7. **Check daemon status**
    `wrapctl status`
 
 ### Wayland
