@@ -46,9 +46,11 @@
 7. **Check daemon status**
    `wrapctl status`
 
-### Wayland
+### Paste backends
 
-`wrapd` uses `zwlr_data_control_manager_v1` for clipboard access and `zwp_virtual_keyboard_manager_v1` for paste key events.
+On Linux, `wrapd` uses `zwlr_data_control_manager_v1` for clipboard access and `zwp_virtual_keyboard_manager_v1` for paste key events.
+
+On macOS, `wrapctl` uses the system pasteboard; the managed Hammerspoon runtime emits Command-V.
 
 ## Home Manager
 
@@ -58,3 +60,5 @@
   programs.wrap.enable = true;
 }
 ```
+
+For nix-darwin, also import `inputs.wrap.darwinModules.default`; it declares the Hammerspoon cask.

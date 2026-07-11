@@ -34,5 +34,8 @@
         };
       }) // {
         homeManagerModules.default = import ./nix/home-manager.nix self;
+        darwinModules.default = {
+          homebrew.casks = [ "hammerspoon" ];
+        };
       };
 }
